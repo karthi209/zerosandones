@@ -1,29 +1,24 @@
-# Frontend Dockerfile
-FROM node:18-alpine as build
+# Use a Node.js base image
+FROM node:18-alpine
 
+# Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package.json and package-lock.json (or yarn.lock) and install dependencies
 COPY package*.json ./
+RUN npm install
 
-# Install dependencies
-RUN npm ci
-
-# Copy source code
+# Copy the rest of the app
 COPY . .
 
-# Build the application
+# Build the Vite app (this will create the dist/ folder)
 RUN npm run build
 
-# Production stage
-FROM nginx:alpine
+# Install a lightweight web server to serve the build
+RUN npm install -g serve
 
-# Copy built assets from build stage
-COPY --from=build /app/dist /usr/share/nginx/html
+# Expose the port the app will run on
+EXPOSE 5173
 
-# Copy nginx configuration (optional - create if needed)
-# COPY nginx.conf /etc/nginx/nginx.conf
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+# Start the app using serve
+CMD ["serve", "-s", "dist", "-l", "5173"]

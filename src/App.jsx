@@ -1,6 +1,7 @@
 import React from 'react';
 import './styles/variables.css';
 import './styles/typography.css';
+import './styles/classic2000s.css';
 import './styles/book.css';
 import './styles/responsive.css';
 import './App.css';

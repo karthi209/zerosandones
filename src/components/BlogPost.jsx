@@ -1,76 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import { Tweet } from 'react-tweet';
 import { fetchBlogs } from '../services/api';
 import './BlogPost.css';
-
-// Helper function to safely convert content to string for ReactMarkdown
-const safeMarkdownContent = (content) => {
-  if (typeof content === 'string') {
-    return content;
-  }
-  if (content == null) {
-    return '';
-  }
-  return String(content);
-};
-
-// Extract tweet ID from Twitter/X URL
-const extractTweetId = (url) => {
-  if (!url) return null;
-  
-  // Match patterns like:
-  // https://twitter.com/username/status/1234567890
-  // https://x.com/username/status/1234567890
-  // twitter.com/username/status/1234567890
-  const match = url.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/);
-  return match ? match[1] : null;
-};
-
-// Custom component to render links, with special handling for Twitter URLs
-const MarkdownLink = ({ href, children }) => {
-  const tweetId = extractTweetId(href);
-  
-  if (tweetId) {
-    return (
-      <div style={{ margin: 'var(--space-xl) 0', display: 'flex', justifyContent: 'center' }}>
-        <Tweet id={tweetId} />
-      </div>
-    );
-  }
-  
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
-  );
-};
-
-// Custom component to render paragraphs, detecting standalone Twitter URLs
-const MarkdownParagraph = ({ children }) => {
-  // Check if the paragraph contains only a Twitter URL as text (no other content)
-  const text = typeof children === 'string' ? children.trim() : 
-               Array.isArray(children) ? children.map(c => {
-                 if (typeof c === 'string') return c;
-                 // If it's a link, get its href
-                 if (c && c.props && c.props.href) return c.props.href;
-                 return '';
-               }).join('').trim() : '';
-  
-  const tweetId = extractTweetId(text);
-  
-  // Only replace if the paragraph is essentially just a Twitter URL (with optional whitespace)
-  if (tweetId && text.match(/^https?:\/\/(?:twitter\.com|x\.com)\/\w+\/status\/\d+\/?\s*$/i)) {
-    return (
-      <div style={{ margin: 'var(--space-xl) 0', display: 'flex', justifyContent: 'center' }}>
-        <Tweet id={tweetId} />
-      </div>
-    );
-  }
-  
-  return <p>{children}</p>;
-};
+import DOMPurify from 'dompurify';
 
 export default function BlogPost() {
   const { id: paramId } = useParams();
@@ -184,14 +116,14 @@ export default function BlogPost() {
           Posted on {new Date(post.date).toLocaleDateString()} in {post.category}
         </div>
         <div className="post-content">
-          <ReactMarkdown
-            components={{
-              a: ({ href, children }) => <MarkdownLink href={href}>{children}</MarkdownLink>,
-              p: ({ children }) => <MarkdownParagraph>{children}</MarkdownParagraph>
+          <div 
+            dangerouslySetInnerHTML={{ 
+              __html: DOMPurify.sanitize(post.content || '', {
+                ADD_TAGS: ['iframe'],
+                ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling']
+              })
             }}
-          >
-            {safeMarkdownContent(post.content)}
-          </ReactMarkdown>
+          />
         </div>
         <footer className="post-footer">
           <div className="post-footer-main">

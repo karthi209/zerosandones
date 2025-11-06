@@ -181,8 +181,13 @@
 
   /* Hide separator and subtitle on smaller mobile screens */
   .site-title-separator,
-  .site-title-subtitle {
+  .site-title-subtitle,
+  .site-favicon.hide-mobile {
     display: none;
+  }
+  
+  .hide-mobile {
+    display: none !important;
   }
 
   /* Navigation hidden by default on mobile */

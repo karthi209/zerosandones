@@ -11,6 +11,27 @@ const extractTweetId = (url) => {
 export default function FeaturedTweets() {
   const [urls, setUrls] = useState([]);
   const [error, setError] = useState('');
+  const [theme, setTheme] = useState('light');
+
+  // Detect theme changes
+  useEffect(() => {
+    const updateTheme = () => {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+      setTheme(currentTheme);
+    };
+
+    // Initial theme
+    updateTheme();
+
+    // Watch for theme changes
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +66,7 @@ export default function FeaturedTweets() {
           <div
             key={idx}
             className="featured-tweet"
-            data-theme="light"
+            data-theme={theme}
             style={{ display: 'flex', justifyContent: 'center', width: '100%' }}
           >
             <div style={{ width: '100%', maxWidth: 900 }}>

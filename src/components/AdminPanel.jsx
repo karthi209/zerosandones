@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { adminCreateBlog, adminFetchFeaturedTweets, adminUpdateFeaturedTweets, getStoredApiKey, setStoredApiKey } from '../services/admin';
-import { adminCreateLog } from '../services/logs-admin';
+import { adminCreateBlog, getStoredApiKey, setStoredApiKey } from '../services/admin';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 export default function AdminPanel() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  
   const [apiKey, setApiKey] = useState('');
   const [status, setStatus] = useState('');
 
@@ -12,31 +18,74 @@ export default function AdminPanel() {
   const [tags, setTags] = useState('');
   const [content, setContent] = useState('');
 
-  // Featured tweets
-  const [tweetUrls, setTweetUrls] = useState(['', '', '', '', '']);
+  // Quill modules configuration
+  const modules = useMemo(() => ({
+    toolbar: [
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      [{ 'font': [] }],
+      [{ 'size': ['small', false, 'large', 'huge'] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'script': 'sub'}, { 'script': 'super' }],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'indent': '-1'}, { 'indent': '+1' }],
+      [{ 'direction': 'rtl' }],
+      [{ 'align': [] }],
+      ['blockquote', 'code-block'],
+      ['link', 'image', 'video'],
+      ['clean']
+    ],
+    clipboard: {
+      matchVisual: false,
+    }
+  }), []);
 
-  // Logs form
-  const [logTitle, setLogTitle] = useState('');
-  const [logType, setLogType] = useState('games');
-  const [logContent, setLogContent] = useState('');
-  const [logRating, setLogRating] = useState('');
+  const formats = [
+    'header', 'font', 'size',
+    'bold', 'italic', 'underline', 'strike',
+    'color', 'background',
+    'script',
+    'list', 'bullet', 'indent',
+    'direction', 'align',
+    'blockquote', 'code-block',
+    'link', 'image', 'video'
+  ];
 
   useEffect(() => {
+    // Check if already authenticated
+    const authStatus = sessionStorage.getItem('adminAuth');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
+    }
+    
     const key = getStoredApiKey();
     if (key) setApiKey(key);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const list = await adminFetchFeaturedTweets();
-        const urls = (list || []).map((x) => x.url);
-        setTweetUrls([urls[0] || '', urls[1] || '', urls[2] || '', urls[3] || '', urls[4] || '']);
-      } catch { /* ignore */ }
-    })();
-  }, []);
+  const handleLogin = (e) => {
+    e.preventDefault();
+    // Get credentials from environment variables
+    const validUsername = import.meta.env.VITE_ADMIN_USERNAME || 'admin';
+    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'password';
+    
+    if (username === validUsername && password === validPassword) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('adminAuth', 'true');
+      setLoginError('');
+    } else {
+      setLoginError('Invalid username or password');
+      setPassword('');
+    }
+  };
 
-  const canSubmitBlog = useMemo(() => apiKey && title && category && content, [apiKey, title, category, content]);
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('adminAuth');
+    setUsername('');
+    setPassword('');
+  };
+
+  const canSubmitBlog = useMemo(() => title && category && content, [title, category, content]);
 
   const handleSaveKey = () => {
     setStoredApiKey(apiKey.trim());
@@ -57,48 +106,78 @@ export default function AdminPanel() {
     }
   };
 
-  const submitTweets = async (e) => {
-    e.preventDefault();
-    try {
-      setStatus('Updating featured tweets...');
-      const urls = tweetUrls.map((u) => u.trim()).filter(Boolean).slice(0, 5);
-      await adminUpdateFeaturedTweets(urls);
-      setStatus('Featured tweets updated');
-    } catch (err) {
-      setStatus(`Error: ${err.message || 'Failed'}`);
-    }
-  };
-
-  const submitLog = async (e) => {
-    e.preventDefault();
-    try {
-      setStatus('Creating log...');
-      await adminCreateLog({ title: logTitle, type: logType, content: logContent, rating: logRating || null });
-      setStatus('Log created');
-      setLogTitle(''); setLogType('games'); setLogContent(''); setLogRating('');
-    } catch (err) {
-      setStatus(`Error: ${err.message || 'Failed'}`);
-    }
-  };
+  // Login screen
+  if (!isAuthenticated) {
+    return (
+      <div className="container">
+        <div className="post" style={{ maxWidth: '480px', margin: '4rem auto', padding: '2rem' }}>
+          <h2 className="post-title" style={{ textAlign: 'center', marginBottom: '2rem' }}>Admin Login</h2>
+          <form onSubmit={handleLogin} className="add-content-form">
+            <div className="form-group">
+              <label className="form-label">Username</label>
+              <input 
+                className="form-input" 
+                type="text"
+                value={username} 
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <input 
+                className="form-input" 
+                type="password"
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
+            {loginError && (
+              <div style={{ color: 'var(--color-accent)', marginBottom: '1rem', textAlign: 'center' }}>
+                {loginError}
+              </div>
+            )}
+            <div className="form-actions">
+              <button className="form-button form-button-primary" type="submit">
+                Login
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
-      <h2 className="post-title" style={{ marginTop: 'var(--space-lg)' }}>Admin Panel</h2>
-
-      <section className="post" style={{ borderBottom: 'none' }}>
-        <h3 className="twitter-sidebar-title">Authentication</h3>
-        <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
-          <input
-            type="password"
-            placeholder="Enter API key"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            style={{ maxWidth: 480 }}
-          />
-          <button className="form-button form-button-primary" onClick={handleSaveKey}>Save Key</button>
-          {status && <span style={{ color: 'var(--color-text-light)' }}>{status}</span>}
-        </div>
-      </section>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginTop: 'var(--space-lg)', 
+        marginBottom: 'var(--space-xl)',
+        gap: '1rem',
+        flexWrap: 'wrap'
+      }}>
+        <h2 className="post-title" style={{ margin: 0, flex: '1 1 auto' }}>Admin Panel</h2>
+        <button 
+          className="form-button" 
+          onClick={handleLogout}
+          style={{ 
+            padding: '0.5rem 1.25rem',
+            fontSize: '0.9rem',
+            borderRadius: '8px',
+            transition: 'all 0.2s ease',
+            flex: '0 0 auto',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          Logout
+        </button>
+      </div>
 
       <section className="post">
         <h3 className="twitter-sidebar-title">Create Blog</h3>
@@ -116,65 +195,47 @@ export default function AdminPanel() {
             <input className="form-input" value={tags} onChange={(e) => setTags(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Content (Markdown)</label>
-            <textarea className="form-textarea" value={content} onChange={(e) => setContent(e.target.value)} />
+            <label className="form-label">Content</label>
+            <div style={{ 
+              border: '1px solid var(--color-border)', 
+              borderRadius: '8px',
+              overflow: 'hidden'
+            }}>
+              <ReactQuill
+                theme="snow"
+                value={content}
+                onChange={setContent}
+                modules={modules}
+                formats={formats}
+                placeholder="Write your blog content here..."
+                style={{ 
+                  minHeight: '400px',
+                  backgroundColor: 'var(--color-background)'
+                }}
+              />
+            </div>
+            <p style={{ 
+              fontSize: '0.875rem', 
+              color: 'var(--color-text-light)', 
+              marginTop: '0.5rem' 
+            }}>
+              Supports rich formatting, images, videos, code blocks, and more
+            </p>
           </div>
           <div className="form-actions">
             <button className="form-button form-button-primary" type="submit" disabled={!canSubmitBlog}>Create Blog</button>
-          </div>
-        </form>
-      </section>
-
-      <section className="post">
-        <h3 className="twitter-sidebar-title">Featured Tweets (max 5)</h3>
-        <form onSubmit={submitTweets} className="add-content-form">
-          {tweetUrls.map((u, i) => (
-            <div className="form-group" key={i}>
-              <label className="form-label">Tweet URL #{i + 1}</label>
-              <input className="form-input" value={u} onChange={(e) => {
-                const next = [...tweetUrls];
-                next[i] = e.target.value;
-                setTweetUrls(next);
-              }} />
-            </div>
-          ))}
-          <div className="form-actions">
-            <button className="form-button form-button-primary" type="submit">Save Featured Tweets</button>
-          </div>
-        </form>
-      </section>
-
-      <section className="post">
-        <h3 className="twitter-sidebar-title">Create Log</h3>
-        <form onSubmit={submitLog} className="add-content-form">
-          <div className="form-group">
-            <label className="form-label">Title</label>
-            <input className="form-input" value={logTitle} onChange={(e) => setLogTitle(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Type</label>
-            <select className="form-input" value={logType} onChange={(e) => setLogType(e.target.value)}>
-              <option value="games">Games</option>
-              <option value="movies">Movies</option>
-              <option value="series">TV Series</option>
-              <option value="books">Books</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Content</label>
-            <textarea className="form-textarea" value={logContent} onChange={(e) => setLogContent(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Rating</label>
-            <input className="form-input" value={logRating} onChange={(e) => setLogRating(e.target.value)} />
-          </div>
-          <div className="form-actions">
-            <button className="form-button form-button-primary" type="submit">Create Log</button>
+            {status && <span style={{ color: 'var(--color-text-light)', marginLeft: '1rem' }}>{status}</span>}
           </div>
         </form>
       </section>
     </div>
   );
 }
+
+
+
+
+
+
 
 

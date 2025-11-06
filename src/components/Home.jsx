@@ -57,7 +57,6 @@ export default function Home({ themeToggleButton }) {
   const mainNavigation = [
     { id: 'home', name: 'home' },
     { id: 'blogs', name: 'blogs' },
-    { id: 'logs', name: 'logs' },
     { id: 'about', name: 'about' },
   ];
   
@@ -127,8 +126,6 @@ export default function Home({ themeToggleButton }) {
       <div className="homepage-layout">
         <div className="homepage-main">
           <div className="post">
-            <h2 className="post-title">Welcome!</h2>
-            <div className="post-date">{new Date().toLocaleDateString()}</div>
             <div className="post-content">
               <p>
                 $ whoami<br/>
@@ -190,13 +187,6 @@ export default function Home({ themeToggleButton }) {
             )}
           </div>
         </div>
-
-        <aside className="homepage-sidebar">
-          <div className="twitter-sidebar-container">
-            <h3 className="twitter-sidebar-title">Featured Tweets</h3>
-            <FeaturedTweets />
-          </div>
-        </aside>
       </div>
     );
   };
@@ -213,10 +203,16 @@ export default function Home({ themeToggleButton }) {
                 setMobileMenuOpen(false);
               }}
               className="site-title"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.7em' }}
             >
-              <span className="site-title-main">notkarthik</span>
-              <span className="site-title-separator"> // </span>
-              <span className="site-title-subtitle">thoughts and chaos</span>
+              <span className="site-title-main">01100101</span>
+              <span className="site-title-separator hide-mobile"> // </span>
+              <span 
+                className="site-title-subtitle hide-mobile"
+                style={{ margin: 0, padding: 0 }}
+              >
+                thoughts and chaos
+              </span>
             </h1>
             
             <button 
@@ -228,26 +224,32 @@ export default function Home({ themeToggleButton }) {
             </button>
           </div>
           
-          <nav className={`navigation ${mobileMenuOpen ? 'mobile-open' : ''}`} style={{ display: 'flex', alignItems: 'center' }}>
-            {mainNavigation.map((item, idx) => (
-              <a
-                key={item.id}
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setActivePage(item.id);
-                  navigate(`/${item.id === 'home' ? '' : item.id}`);
-                  setMobileMenuOpen(false);
-                }}
-                className={activePage === item.id ? 'nav-link-active' : 'nav-link'}
-              >
-                {item.name}
-              </a>
-            ))}
-            {themeToggleButton}
+          <nav className={`navigation ${mobileMenuOpen ? 'mobile-open' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+            <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+              {mainNavigation.map((item) => (
+                <a
+                  key={item.id}
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    window.scrollTo({ top: 0, behavior: 'instant' });
+                    setActivePage(item.id);
+                    navigate(`/${item.id === 'home' ? '' : item.id}`);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={activePage === item.id ? 'nav-link-active' : 'nav-link'}
+                >
+                  {item.name}
+                </a>
+              ))}
+            </div>
+            <div className="nav-actions">
+              {themeToggleButton}
+            </div>
           </nav>
         </div>
       </header>
+
       <div className="container">
         <main>
           {isAdminPage ? (
@@ -258,20 +260,11 @@ export default function Home({ themeToggleButton }) {
             <>
               {activePage === 'home' && renderHomePage()}
               {activePage === 'blogs' && <BlogsPage entries={entries.blogs} />}
-              {activePage === 'logs' && (
-                <LogsPage 
-                  entries={getActiveLogEntries()} 
-                  activeTab={activeLogTab}
-                  setActiveTab={setActiveLogTab}
-                  tabs={logTabs}
-                />
-              )}
               {activePage === 'about' && <AboutPage />}
             </>
           )}
         </main>
       </div>
-      {/* Creation UI removed; use /admin for all write operations */}
     </div>
   );
 }
