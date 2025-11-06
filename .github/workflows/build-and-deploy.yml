@@ -1,0 +1,352 @@
+name: build-and-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_frontend:
+        description: 'Build frontend image'
+        required: true
+        default: false
+        type: boolean
+      build_backend:
+        description: 'Build backend image'
+        required: true
+        default: false
+        type: boolean
+      deploy_frontend:
+        description: 'Deploy frontend image'
+        required: true
+        default: false
+        type: boolean
+      deploy_backend:
+        description: 'Deploy backend image'
+        required: true
+        default: false
+        type: boolean
+      deploy_postgres:
+        description: 'Deploy postgres'
+        required: true
+        default: false
+        type: boolean
+      deploy_nginx:
+        description: 'Deploy nginx'
+        required: true
+        default: false
+        type: boolean
+      frontend_version:
+        description: 'Frontend version to deploy (optional): eg: v1.0.0'
+        required: false
+        type: string
+      backend_version:
+        description: 'Backend version to deploy (optional): eg: v1.0.0'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read current versions from VERSION.txt
+        id: read_versions
+        run: |
+          FRONTEND_VERSION=$(grep "frontend=" VERSION.txt | cut -d '=' -f 2)
+          BACKEND_VERSION=$(grep "backend=" VERSION.txt | cut -d '=' -f 2)
+          echo "FRONTEND_VERSION=$FRONTEND_VERSION" >> $GITHUB_ENV
+          echo "BACKEND_VERSION=$BACKEND_VERSION" >> $GITHUB_ENV
+          
+      - name: Increment frontend version
+        if: ${{ github.event.inputs.build_frontend == 'true' }}
+        run: |
+          FRONTEND_VERSION_NO_V=$(echo ${{ env.FRONTEND_VERSION }} | sed 's/^v//')
+          FRONTEND_NEW_VERSION="v$(echo $FRONTEND_VERSION_NO_V | cut -d'.' -f1).$(echo $FRONTEND_VERSION_NO_V | cut -d'.' -f2).$(($(echo $FRONTEND_VERSION_NO_V | cut -d'.' -f3) + 1))"
+          echo "New frontend version: $FRONTEND_NEW_VERSION"
+          echo "FRONTEND_NEW_VERSION=$FRONTEND_NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Increment backend version
+        if: ${{ github.event.inputs.build_backend == 'true' }}
+        run: |
+          BACKEND_VERSION_NO_V=$(echo ${{ env.BACKEND_VERSION }} | sed 's/^v//')
+          BACKEND_NEW_VERSION="v$(echo $BACKEND_VERSION_NO_V | cut -d'.' -f1).$(echo $BACKEND_VERSION_NO_V | cut -d'.' -f2).$(($(echo $BACKEND_VERSION_NO_V | cut -d'.' -f3) + 1))"
+          echo "New backend version: $BACKEND_NEW_VERSION"
+          echo "BACKEND_NEW_VERSION=$BACKEND_NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Build and push frontend image
+        if: ${{ github.event.inputs.build_frontend == 'true' }}
+        id: push_frontend
+        run: |
+          docker build -t ghcr.io/${{ github.repository_owner }}/portfolio-site/frontend:${{ env.FRONTEND_NEW_VERSION }} -f Dockerfile .
+          docker push ghcr.io/${{ github.repository_owner }}/portfolio-site/frontend:${{ env.FRONTEND_NEW_VERSION }}
+
+      - name: Build and push backend image
+        if: ${{ github.event.inputs.build_backend == 'true' }}
+        id: push_backend
+        run: |
+          cd backend/
+          docker build -t ghcr.io/${{ github.repository_owner }}/portfolio-site/backend:${{ env.BACKEND_NEW_VERSION }} -f Dockerfile .
+          docker push ghcr.io/${{ github.repository_owner }}/portfolio-site/backend:${{ env.BACKEND_NEW_VERSION }}
+
+      - name: Update frontend version in VERSION.txt
+        if: ${{ github.event.inputs.build_frontend == 'true' && steps.push_frontend.outcome == 'success' }}
+        run: |
+          sed -i "s/frontend=.*/frontend=${{ env.FRONTEND_NEW_VERSION }}/" VERSION.txt
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add VERSION.txt
+          git commit -m "Update frontend version to ${{ env.FRONTEND_NEW_VERSION }}"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
+
+      - name: Update backend version in VERSION.txt
+        if: ${{ github.event.inputs.build_backend == 'true' && steps.push_backend.outcome == 'success' }}
+        run: |
+          sed -i "s/backend=.*/backend=${{ env.BACKEND_NEW_VERSION }}/" VERSION.txt
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add VERSION.txt
+          git commit -m "Update backend version to ${{ env.BACKEND_NEW_VERSION }}"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
+  
+  deploy_frontend:
+    if: ${{ github.event.inputs.deploy_frontend == 'true' }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Pull latest changes from repository
+        run: git pull origin HEAD
+
+      - name: Read frontend version from VERSION.txt
+        run: |
+          FRONTEND_VERSION=$(grep "frontend=" VERSION.txt | cut -d '=' -f 2)
+          echo "FRONTEND_VERSION=$FRONTEND_VERSION" >> $GITHUB_ENV
+
+      - name: Use frontend version from input or VERSION.txt
+        run: |
+          if [ -z "${{ github.event.inputs.frontend_version }}" ]; then
+            echo "Using frontend version from VERSION.txt: ${{ env.FRONTEND_VERSION }}"
+            FRONTEND_VERSION_TO_DEPLOY="${{ env.FRONTEND_VERSION }}"
+          else
+            echo "Using frontend version from input: ${{ github.event.inputs.frontend_version }}"
+            FRONTEND_VERSION_TO_DEPLOY="${{ github.event.inputs.frontend_version }}"
+          fi
+          echo "FRONTEND_VERSION_TO_DEPLOY=$FRONTEND_VERSION_TO_DEPLOY" >> $GITHUB_ENV
+
+      - name: Deploy frontend Docker container to production server
+        run: |
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} << 'EOF'
+            docker stop frontend-portfolio || true
+            docker rm frontend-portfolio || true
+            docker rmi $(docker images ghcr.io/${{ github.repository_owner }}/portfolio-site/frontend -q) || true
+            docker network inspect network-portfolio > /dev/null 2>&1 || docker network create network-portfolio
+            docker pull ghcr.io/${{ github.repository_owner }}/portfolio-site/frontend:${{ env.FRONTEND_VERSION_TO_DEPLOY }}
+            docker run -d --name frontend-portfolio -p 5173:5173 --network network-portfolio ghcr.io/${{ github.repository_owner }}/portfolio-site/frontend:${{ env.FRONTEND_VERSION_TO_DEPLOY }}
+            docker update --restart unless-stopped frontend-portfolio
+          EOF
+
+      - name: Check if frontend container is running
+        run: |
+          echo "Checking if frontend container is running on remote server..."
+          TIMEOUT=120
+          START_TIME=$(date +%s)
+          
+          until sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} "docker ps --filter 'name=frontend-portfolio' --filter 'status=running' --format '{{.Names}}' | grep -w 'frontend-portfolio'"; do
+            echo "Container not found or not running yet. Retrying in 5 seconds..."
+            sleep 5
+            
+            CURRENT_TIME=$(date +%s)
+            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+            
+            if [ $ELAPSED_TIME -ge $TIMEOUT ]; then
+              echo "Frontend container did not start within 2 minutes. Exiting."
+              exit 1
+            fi
+          done
+          echo "frontend-portfolio container is running!"
+
+  deploy_backend:
+    if: ${{ github.event.inputs.deploy_backend == 'true' }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Pull latest changes from repository
+        run: git pull origin HEAD
+
+      - name: Read backend version from VERSION.txt
+        run: |
+          BACKEND_VERSION=$(grep "backend=" VERSION.txt | cut -d '=' -f 2)
+          echo "BACKEND_VERSION=$BACKEND_VERSION" >> $GITHUB_ENV
+
+      - name: Use backend version from input or VERSION.txt
+        run: |
+          if [ -z "${{ github.event.inputs.backend_version }}" ]; then
+            echo "Using backend version from VERSION.txt: ${{ env.BACKEND_VERSION }}"
+            BACKEND_VERSION_TO_DEPLOY="${{ env.BACKEND_VERSION }}"
+          else
+            echo "Using backend version from input: ${{ github.event.inputs.backend_version }}"
+            BACKEND_VERSION_TO_DEPLOY="${{ github.event.inputs.backend_version }}"
+          fi
+          echo "BACKEND_VERSION_TO_DEPLOY=$BACKEND_VERSION_TO_DEPLOY" >> $GITHUB_ENV
+
+      - name: Deploy backend Docker container to production server
+        run: |
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} << 'EOF'
+            docker stop backend-portfolio || true
+            docker rm backend-portfolio  || true
+            docker rmi $(docker images ghcr.io/${{ github.repository_owner }}/portfolio-site/backend -q) || true
+            docker network inspect network-portfolio > /dev/null 2>&1 || docker network create network-portfolio
+            docker pull ghcr.io/${{ github.repository_owner }}/portfolio-site/backend:${{ env.BACKEND_VERSION_TO_DEPLOY }}
+            docker run -d \
+              --name backend-portfolio \
+              --network network-portfolio \
+              -p 3000:3000 \
+              -e DB_USER="${{ secrets.DB_USER }}" \
+              -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+              -e DB_HOST="${{ secrets.DB_HOST }}" \
+              -e DB_PORT="${{ secrets.DB_PORT }}" \
+              -e DB_NAME="${{ secrets.DB_NAME }}" \
+              -e JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+              -e SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+              ghcr.io/${{ github.repository_owner }}/portfolio-site/backend:${{ env.BACKEND_VERSION_TO_DEPLOY }}
+            docker update --restart unless-stopped backend-portfolio
+          EOF
+
+      - name: Check if backend container is running
+        run: |
+          echo "Checking if backend container is running on remote server..."
+          TIMEOUT=120
+          START_TIME=$(date +%s)
+          
+          until sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} "docker ps --filter 'name=backend-portfolio' --filter 'status=running' --format '{{.Names}}' | grep -w 'backend-portfolio'"; do
+            echo "Container not found or not running yet. Retrying in 5 seconds..."
+            sleep 5
+            
+            CURRENT_TIME=$(date +%s)
+            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+            
+            if [ $ELAPSED_TIME -ge $TIMEOUT ]; then
+              echo "Backend container did not start within 2 minutes. Exiting."
+              exit 1
+            fi
+          done
+          echo "Backend container is running!"
+
+  deploy_postgres:
+    if: ${{ github.event.inputs.deploy_postgres == 'true' }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Deploy postgres
+        run: |
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} << 'EOF'
+            docker stop postgres-portfolio || true
+            docker rm postgres-portfolio || true
+            docker network inspect network-portfolio > /dev/null 2>&1 || docker network create network-portfolio
+            docker pull postgres:latest
+            docker run -d --name postgres-portfolio \
+              -e POSTGRES_USER="${{ secrets.DB_USER }}" \
+              -e POSTGRES_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+              -e POSTGRES_DB="${{ secrets.DB_NAME }}" \
+              -v postgres_portfolio_data:/var/lib/postgresql/data \
+              --network network-portfolio \
+              -p 5432:5432 \
+              postgres:latest
+            docker update --restart unless-stopped postgres-portfolio
+          EOF
+
+      - name: Check if postgres container is running
+        run: |
+          echo "Checking if postgres container is running on remote server..."
+          TIMEOUT=120
+          START_TIME=$(date +%s)
+          
+          until sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} "docker ps --filter 'name=postgres-portfolio' --filter 'status=running' --format '{{.Names}}' | grep -w 'postgres-portfolio'"; do
+            echo "Container not found or not running yet. Retrying in 5 seconds..."
+            sleep 5
+            
+            CURRENT_TIME=$(date +%s)
+            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+            
+            if [ $ELAPSED_TIME -ge $TIMEOUT ]; then
+              echo "Postgres container did not start within 2 minutes. Exiting."
+              exit 1
+            fi
+          done
+          echo "postgres-portfolio container is running!"
+
+  deploy_nginx:
+    if: ${{ github.event.inputs.deploy_nginx == 'true' }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      - name: Deploy nginx
+        run: |
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} << 'EOF'
+            docker stop nginx-portfolio || true
+            docker rm nginx-portfolio || true
+            docker network inspect network-portfolio > /dev/null 2>&1 || docker network create network-portfolio
+            docker pull nginx:latest
+            docker run -d --name nginx-portfolio \
+              -v ~/nginx_conf/nginx.conf:/etc/nginx/nginx.conf:ro \
+              -v /etc/letsencrypt:/etc/letsencrypt:ro \
+              -p 80:80 \
+              -p 443:443 \
+              --network network-portfolio \
+              nginx:latest
+            docker update --restart unless-stopped nginx-portfolio
+          EOF
+
+      - name: Check if nginx container is running
+        run: |
+          echo "Checking if nginx container is running on remote server..."
+          TIMEOUT=120
+          START_TIME=$(date +%s)
+          
+          until sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_IP }} "docker ps --filter 'name=nginx-portfolio' --filter 'status=running' --format '{{.Names}}' | grep -w 'nginx-portfolio'"; do
+            echo "Container not found or not running yet. Retrying in 5 seconds..."
+            sleep 5
+            
+            CURRENT_TIME=$(date +%s)
+            ELAPSED_TIME=$((CURRENT_TIME - START_TIME))
+            
+            if [ $ELAPSED_TIME -ge $TIMEOUT ]; then
+              echo "Nginx container did not start within 2 minutes. Exiting."
+              exit 1
+            fi
+          done
+          echo "nginx-portfolio container is running!"
