@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import './styles/variables.css';
 import './styles/typography.css';
 import './styles/classic2000s.css';

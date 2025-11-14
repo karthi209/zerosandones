@@ -13,7 +13,7 @@ export default function BlogPost() {
   const [error, setError] = useState(null);
 
   // Extract ID from URL pathname if not in params (fallback for catch-all routes)
-  const id = paramId || location.pathname.replace('/blog/', '').replace('/thoughts/', '');
+  const id = paramId || location.pathname.replace('/blog/', '').replace('/blogs/', '');
 
   // Ancient symbol for the post (randomized based on ID for consistency)
   const symbols = [
@@ -91,14 +91,14 @@ export default function BlogPost() {
             </p>
             <p>
               <a 
-                href="/thoughts"
+                href="/blogs"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate('/thoughts');
+                  navigate('/blogs');
                 }}
                 className="read-more-link"
               >
-                ← Back to thoughts
+                ← Back to blogs
               </a>
             </p>
           </div>
@@ -110,27 +110,28 @@ export default function BlogPost() {
   return (
     <div className="container">
       <article className="post blog-post-article">
-        <div className="blog-post-nav">
+        <div className="blog-post-header">
           <a 
-            href="/thoughts"
+            href="/blogs"
             onClick={(e) => {
               e.preventDefault();
-              navigate('/thoughts');
+              navigate('/blogs');
             }}
             className="back-link"
-            title="Back to thoughts"
+            title="Back to blogs"
+            aria-label="Back to blogs"
           >
             ◀
           </a>
-        </div>
-        <div className="blog-post-header">
-          <div className="blog-post-symbol-top">{postSymbol}</div>
-          <h1 className="post-title">{post.title}</h1>
-          <div className="post-metadata-group">
-            <span className="post-date">
-              {new Date(post.date).toLocaleDateString()}
-            </span>
-            <span className="post-category-badge">{post.category}</span>
+          <div className="blog-post-header-main">
+            <div className="blog-post-symbol-top">{postSymbol}</div>
+            <h1 className="post-title">{post.title}</h1>
+            <div className="post-metadata-group">
+              <span className="post-date">
+                {new Date(post.date).toLocaleDateString()}
+              </span>
+              <span className="post-category-badge">{post.category}</span>
+            </div>
           </div>
         </div>
         <div className="post-content">

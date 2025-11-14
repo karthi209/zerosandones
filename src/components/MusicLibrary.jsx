@@ -1,40 +1,36 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { fetchLogs } from '../services/api';
+import { Link } from 'react-router-dom';
+import './MusicLibrary.css';
 
 export default function MusicLibrary() {
-  const navigate = useNavigate();
-  const [entries, setEntries] = useState([]);
+  const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    const fetchPlaylists = async () => {
       try {
-        const music = await fetchLogs('music');
-        setEntries(music);
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        const url = apiUrl.endsWith('/api') ? `${apiUrl}/playlists` : `${apiUrl}/api/playlists`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch playlists');
+        const data = await response.json();
+        setPlaylists(data);
       } catch (error) {
-        console.error('Error fetching music:', error);
+        console.error('Error fetching playlists:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchPlaylists();
   }, []);
-
-  const handleEntryClick = (entry) => {
-    navigate(`/myverse/music/${entry._id || entry.id}`);
-  };
 
   if (loading) {
     return (
       <div className="container">
         <div className="post">
           <h2 className="post-title">Loading...</h2>
-          <div className="post-content">
-            <p>Fetching music library...</p>
-          </div>
+          <div className="post-content"><p>Fetching playlists...</p></div>
         </div>
       </div>
     );
@@ -42,47 +38,42 @@ export default function MusicLibrary() {
 
   return (
     <div className="container">
-      <div className="post">
-        <h2 className="post-section-title">Music</h2>
+      <section className="post">
+        <h2 className="post-section-title">Playlists</h2>
         <p className="post-content">
-          My playlists, album reviews, and musical discoveries. Songs and albums that shaped my vibe.
+          Curated playlists of songs that shaped my vibe. Each playlist tells a story —
+          from late-night coding sessions to nostalgic throwbacks.
         </p>
-      </div>
+      </section>
 
-      <div className="library-grid">
-        {entries.length === 0 ? (
-          <div className="post">
-            <p className="post-content">No music entries yet. Stay tuned!</p>
-          </div>
-        ) : (
-          entries.map((entry) => (
-            <div 
-              key={entry._id || entry.id} 
-              className="library-card"
-              onClick={() => handleEntryClick(entry)}
-            >
-              {entry.image && (
-                <div className="library-card-image">
-                  <img src={entry.image} alt={entry.title} />
-                </div>
-              )}
-              <div className="library-card-content">
-                <h3 className="library-card-title">{entry.title}</h3>
-                {entry.rating && (
-                  <div className="library-card-rating">
-                    <span className="rating-value">{entry.rating}/5</span>
+      {playlists.length === 0 ? (
+        <section className="post">
+          <p className="post-content">No playlists yet. Check back soon!</p>
+        </section>
+      ) : (
+        playlists.map((p) => {
+          const songCount = p.songs ? p.songs.length : 0;
+          
+          return (
+            <section className="post playlist" key={p.id}>
+              <Link to={`/library/music/${p.id}`} className="playlist-link">
+                <header className="playlist-header">
+                  <div className="playlist-header-main">
+                    <div className="playlist-title-row">
+                      <h3 className="playlist-name">{p.name}</h3>
+                      <span className="playlist-count">{songCount} {songCount === 1 ? 'song' : 'songs'}</span>
+                    </div>
+                    {p.description && (
+                      <p className="playlist-description">{p.description}</p>
+                    )}
                   </div>
-                )}
-                {entry.content && (
-                  <p className="library-card-excerpt">
-                    {entry.content.replace(/<[^>]*>/g, '').substring(0, 100)}...
-                  </p>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+                  <div className="playlist-arrow">→</div>
+                </header>
+              </Link>
+            </section>
+          );
+        })
+      )}
     </div>
   );
 }

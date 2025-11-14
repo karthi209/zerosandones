@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import pool from '../db.js';
+import { Blog } from '../models/Blog.js';
 
 const router = Router();
 
@@ -8,38 +8,25 @@ router.get('/', async (req, res) => {
   try {
     const { category, startDate, endDate, sortBy, order } = req.query;
     
-    let query = 'SELECT * FROM blogs WHERE 1=1';
-    const params = [];
-    let paramCount = 0;
-
-    // Apply filters
-    if (category) {
-      paramCount++;
-      query += ` AND category = $${paramCount}`;
-      params.push(category);
-    }
+    const filters = {};
+    if (category) filters.category = category;
+    if (sortBy) filters.sortBy = sortBy;
+    if (order) filters.order = order;
     
+    const blogs = await Blog.findAll(filters);
+    
+    // Apply date filters if needed (could be moved to model)
+    let filteredBlogs = blogs;
     if (startDate) {
-      paramCount++;
-      query += ` AND date >= $${paramCount}`;
-      params.push(new Date(startDate));
+      filteredBlogs = filteredBlogs.filter(blog => new Date(blog.date) >= new Date(startDate));
+    }
+    if (endDate) {
+      filteredBlogs = filteredBlogs.filter(blog => new Date(blog.date) <= new Date(endDate));
     }
     
-    if (endDate) {
-      paramCount++;
-      query += ` AND date <= $${paramCount}`;
-      params.push(new Date(endDate));
-    }
-
-    // Build sort clause
-    const sortColumn = sortBy || 'date';
-    const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
-    query += ` ORDER BY ${sortColumn} ${sortOrder}`;
-
-    const result = await pool.query(query, params);
     // Map id to _id for frontend compatibility
-    const blogs = result.rows.map(row => ({ ...row, _id: row.id }));
-    res.json(blogs);
+    const result = filteredBlogs.map(row => ({ ...row, _id: row.id }));
+    res.json(result);
   } catch (err) {
     console.error('Error fetching blogs:', err);
     res.status(500).json({ message: err.message });
@@ -49,8 +36,7 @@ router.get('/', async (req, res) => {
 // Get all unique categories
 router.get('/categories', async (req, res) => {
   try {
-    const result = await pool.query('SELECT DISTINCT category FROM blogs ORDER BY category');
-    const categories = result.rows.map(row => row.category);
+    const categories = await Blog.getCategories();
     res.json(categories);
   } catch (err) {
     console.error('Error fetching categories:', err);
@@ -61,12 +47,9 @@ router.get('/categories', async (req, res) => {
 // Get blogs by category
 router.get('/category/:category', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM blogs WHERE category = $1 ORDER BY date DESC',
-      [req.params.category]
-    );
-    const blogs = result.rows.map(row => ({ ...row, _id: row.id }));
-    res.json(blogs);
+    const blogs = await Blog.findAll({ category: req.params.category, sortBy: 'date', order: 'DESC' });
+    const result = blogs.map(row => ({ ...row, _id: row.id }));
+    res.json(result);
   } catch (err) {
     console.error('Error fetching blogs by category:', err);
     res.status(500).json({ message: err.message });
@@ -76,17 +59,9 @@ router.get('/category/:category', async (req, res) => {
 // Get blog archives (grouped by month and year)
 router.get('/archives', async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT 
-        EXTRACT(YEAR FROM date) as year,
-        EXTRACT(MONTH FROM date) as month,
-        COUNT(*) as count
-      FROM blogs
-      GROUP BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
-      ORDER BY year DESC, month DESC
-    `);
+    const archives = await Blog.getArchives();
     
-    const archives = result.rows.map(row => ({
+    const result = archives.map(row => ({
       _id: {
         year: parseInt(row.year),
         month: parseInt(row.month)
@@ -94,7 +69,7 @@ router.get('/archives', async (req, res) => {
       count: parseInt(row.count)
     }));
     
-    res.json(archives);
+    res.json(result);
   } catch (err) {
     console.error('Error fetching archives:', err);
     res.status(500).json({ message: err.message });
@@ -118,15 +93,8 @@ router.post('/', async (req, res) => {
                      tags && typeof tags === 'string' ? tags.split(',').map(t => t.trim()).filter(t => t) :
                      null;
 
-    const result = await pool.query(
-      `INSERT INTO blogs (title, content, category, tags, date)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-       RETURNING *`,
-      [title, content, category, tagsArray]
-    );
-
-    const blog = { ...result.rows[0], _id: result.rows[0].id };
-    res.status(201).json(blog);
+    const blog = await Blog.create({ title, content, category, tags: tagsArray });
+    res.status(201).json({ ...blog, _id: blog.id });
   } catch (err) {
     console.error('Error saving blog:', err);
     res.status(400).json({ message: err.message });
@@ -142,14 +110,13 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ message: 'Invalid blog ID format' });
     }
 
-    const result = await pool.query('SELECT * FROM blogs WHERE id = $1', [id]);
+    const blog = await Blog.findById(id);
 
-    if (result.rows.length === 0) {
+    if (!blog) {
       return res.status(404).json({ message: 'Blog post not found' });
     }
 
-    const blog = { ...result.rows[0], _id: result.rows[0].id };
-    res.json(blog);
+    res.json({ ...blog, _id: blog.id });
   } catch (err) {
     console.error('Error fetching blog:', err);
     res.status(500).json({ message: err.message });
@@ -166,20 +133,13 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ message: 'Invalid blog ID format' });
     }
 
-    const result = await pool.query(
-      `UPDATE blogs 
-       SET title = $1, content = $2, category = $3, tags = $4, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $5
-       RETURNING *`,
-      [title, content, category, tags || null, id]
-    );
+    const blog = await Blog.update(id, { title, content, category, tags: tags || null });
 
-    if (result.rows.length === 0) {
+    if (!blog) {
       return res.status(404).json({ message: 'Blog post not found' });
     }
 
-    const blog = { ...result.rows[0], _id: result.rows[0].id };
-    res.json(blog);
+    res.json({ ...blog, _id: blog.id });
   } catch (err) {
     console.error('Error updating blog:', err);
     res.status(400).json({ message: err.message });
@@ -195,13 +155,13 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ message: 'Invalid blog ID format' });
     }
 
-    const result = await pool.query('DELETE FROM blogs WHERE id = $1 RETURNING *', [id]);
+    const blog = await Blog.delete(id);
 
-    if (result.rows.length === 0) {
+    if (!blog) {
       return res.status(404).json({ message: 'Blog post not found' });
     }
 
-    res.json({ message: 'Blog post deleted successfully', blog: result.rows[0] });
+    res.json({ message: 'Blog post deleted successfully', blog });
   } catch (err) {
     console.error('Error deleting blog:', err);
     res.status(500).json({ message: err.message });

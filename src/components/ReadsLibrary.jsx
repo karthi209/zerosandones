@@ -24,7 +24,7 @@ export default function ReadsLibrary() {
   }, []);
 
   const handleEntryClick = (entry) => {
-    navigate(`/myverse/books/${entry._id || entry.id}`);
+    navigate(`/library/books/${entry._id || entry.id}`);
   };
 
   if (loading) {

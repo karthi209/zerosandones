@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { adminCreateBlog, getStoredApiKey, setStoredApiKey } from '../services/admin';
 import { adminCreateLog } from '../services/logs-admin';
+import { adminCreatePlaylist, adminUpdatePlaylist, adminDeletePlaylist, adminAddSong, adminAddSongsBulk, adminDeleteSong, fetchPlaylists } from '../services/playlists-admin';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
@@ -26,12 +27,20 @@ export default function AdminPanel() {
   const [logRating, setLogRating] = useState(5);
   const [logType, setLogType] = useState('games');
 
-  // Music form
-  const [musicTitle, setMusicTitle] = useState('');
-  const [musicArtist, setMusicArtist] = useState('');
-  const [musicAlbum, setMusicAlbum] = useState('');
-  const [musicSpotifyUrl, setMusicSpotifyUrl] = useState('');
-  const [musicNotes, setMusicNotes] = useState('');
+  // Playlists management
+  const [playlists, setPlaylists] = useState([]);
+  const [playlistName, setPlaylistName] = useState('');
+  const [playlistDescription, setPlaylistDescription] = useState('');
+  const [spotifyUrl, setSpotifyUrl] = useState('');
+  const [youtubeMusicUrl, setYoutubeMusicUrl] = useState('');
+  const [activePlaylist, setActivePlaylist] = useState(null);
+  const [editingPlaylist, setEditingPlaylist] = useState(null);
+  const [songTitle, setSongTitle] = useState('');
+  const [songAlbum, setSongAlbum] = useState('');
+  const [songArtist, setSongArtist] = useState('');
+  const [songYear, setSongYear] = useState('');
+  const [bulkSongs, setBulkSongs] = useState('');
+  const [showBulkInput, setShowBulkInput] = useState(false);
 
   // Quill modules configuration - simplified for mobile
   const modules = useMemo(() => ({
@@ -67,7 +76,21 @@ export default function AdminPanel() {
     
     const key = getStoredApiKey();
     if (key) setApiKey(key);
-  }, []);
+
+    // Load playlists if on music tab
+    if (activeTab === 'music' && isAuthenticated) {
+      loadPlaylists();
+    }
+  }, [activeTab, isAuthenticated]);
+
+  const loadPlaylists = async () => {
+    try {
+      const data = await fetchPlaylists();
+      setPlaylists(data);
+    } catch (error) {
+      console.error('Error loading playlists:', error);
+    }
+  };
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -122,7 +145,7 @@ export default function AdminPanel() {
         title: logTitle, 
         type: logType, 
         content: logContent, 
-        rating: parseInt(logRating) 
+        rating: logRating ? String(logRating) : null
       });
       setStatus(`${logType.charAt(0).toUpperCase() + logType.slice(1)} entry created successfully!`);
       setLogTitle(''); setLogContent(''); setLogRating(5);
@@ -135,16 +158,132 @@ export default function AdminPanel() {
   const submitMusic = async (e) => {
     e.preventDefault();
     try {
-      setStatus('Creating music entry...');
-      // For now, create as a log entry with type 'music'
-      await adminCreateLog({ 
-        title: `${musicTitle} - ${musicArtist}`, 
-        type: 'music', 
-        content: `Album: ${musicAlbum}\nSpotify: ${musicSpotifyUrl}\n\n${musicNotes}`, 
-        rating: 0 
+      setStatus('Creating playlist...');
+      await adminCreatePlaylist({
+        name: playlistName.trim(),
+        description: playlistDescription.trim()
       });
-      setStatus('Music entry created successfully!');
-      setMusicTitle(''); setMusicArtist(''); setMusicAlbum(''); setMusicSpotifyUrl(''); setMusicNotes('');
+      setStatus('Playlist created successfully!');
+      setPlaylistName('');
+      setPlaylistDescription('');
+      await loadPlaylists();
+      setTimeout(() => setStatus(''), 2000);
+    } catch (err) {
+      setStatus(`Error: ${err.message || 'Failed'}`);
+    }
+  };
+
+  const handleDeletePlaylist = async (id) => {
+    if (!confirm('Delete this playlist and all its songs?')) return;
+    try {
+      setStatus('Deleting playlist...');
+      await adminDeletePlaylist(id);
+      setStatus('Playlist deleted!');
+      await loadPlaylists();
+      if (activePlaylist === id) setActivePlaylist(null);
+      if (editingPlaylist === id) setEditingPlaylist(null);
+      setTimeout(() => setStatus(''), 2000);
+    } catch (err) {
+      setStatus(`Error: ${err.message || 'Failed'}`);
+    }
+  };
+
+  const handleUpdatePlaylist = async (id, name, description, spotifyUrl, youtubeMusicUrl) => {
+    if (!name.trim()) {
+      setStatus('Playlist name is required');
+      setTimeout(() => setStatus(''), 2000);
+      return;
+    }
+    try {
+      setStatus('Updating playlist...');
+      await adminUpdatePlaylist(id, { 
+        name: name.trim(), 
+        description: description.trim(),
+        spotify_url: spotifyUrl?.trim() || null,
+        youtube_music_url: youtubeMusicUrl?.trim() || null
+      });
+      setStatus('Playlist updated!');
+      await loadPlaylists();
+      setEditingPlaylist(null);
+      setTimeout(() => setStatus(''), 2000);
+    } catch (err) {
+      setStatus(`Error: ${err.message || 'Failed'}`);
+    }
+  };
+
+  const handleAddSong = async (playlistId) => {
+    if (!songTitle.trim() || !songArtist.trim()) {
+      setStatus('Song title and artist are required');
+      setTimeout(() => setStatus(''), 2000);
+      return;
+    }
+    try {
+      setStatus('Adding song...');
+      await adminAddSong(playlistId, {
+        title: songTitle.trim(),
+        album: songAlbum.trim(),
+        artist: songArtist.trim(),
+        year: songYear.trim()
+      });
+      setStatus('Song added!');
+      setSongTitle('');
+      setSongAlbum('');
+      setSongArtist('');
+      setSongYear('');
+      await loadPlaylists();
+      setTimeout(() => setStatus(''), 2000);
+    } catch (err) {
+      setStatus(`Error: ${err.message || 'Failed'}`);
+    }
+  };
+
+  const handleAddSongsBulk = async (playlistId) => {
+    if (!bulkSongs.trim()) {
+      setStatus('Please enter songs');
+      setTimeout(() => setStatus(''), 2000);
+      return;
+    }
+
+    try {
+      setStatus('Adding songs...');
+      const lines = bulkSongs.trim().split('\n');
+      const songs = lines
+        .map(line => {
+          const parts = line.split('|').map(p => p.trim());
+          if (parts.length < 2) return null;
+          return {
+            title: parts[0],
+            album: parts[2] || '',
+            artist: parts[1],
+            year: parts[3] || ''
+          };
+        })
+        .filter(s => s !== null);
+
+      if (songs.length === 0) {
+        setStatus('No valid songs found. Format: Title | Artist | Album | Year');
+        setTimeout(() => setStatus(''), 3000);
+        return;
+      }
+
+      const result = await adminAddSongsBulk(playlistId, songs);
+      setStatus(`${result.count} songs added!`);
+      setBulkSongs('');
+      setShowBulkInput(false);
+      await loadPlaylists();
+      setTimeout(() => setStatus(''), 2000);
+    } catch (err) {
+      setStatus(`Error: ${err.message || 'Failed'}`);
+    }
+  };
+
+  const handleDeleteSong = async (playlistId, songId) => {
+    if (!confirm('Remove this song from the playlist?')) return;
+    try {
+      setStatus('Removing song...');
+      await adminDeleteSong(playlistId, songId);
+      setStatus('Song removed!');
+      await loadPlaylists();
       setTimeout(() => setStatus(''), 2000);
     } catch (err) {
       setStatus(`Error: ${err.message || 'Failed'}`);
@@ -440,67 +579,239 @@ export default function AdminPanel() {
         </section>
       )}
 
-      {/* Music Form */}
+      {/* Playlists Management */}
       {activeTab === 'music' && (
-        <section className="post" style={{ padding: 'var(--space-lg)' }}>
-          <h3 className="twitter-sidebar-title" style={{ marginBottom: 'var(--space-md)', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>
-            Add Music / Playlist
-          </h3>
-          <form onSubmit={submitMusic} className="add-content-form">
-            <div className="form-group">
-              <label className="form-label">Song / Playlist Title</label>
-              <input 
-                className="form-input" 
-                value={musicTitle} 
-                onChange={(e) => setMusicTitle(e.target.value)} 
-                placeholder="Song or playlist name"
-                required 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Artist</label>
-              <input 
-                className="form-input" 
-                value={musicArtist} 
-                onChange={(e) => setMusicArtist(e.target.value)} 
-                placeholder="Artist or band name"
-                required 
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Album (optional)</label>
-              <input 
-                className="form-input" 
-                value={musicAlbum} 
-                onChange={(e) => setMusicAlbum(e.target.value)} 
-                placeholder="Album name"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Spotify URL (optional)</label>
-              <input 
-                className="form-input" 
-                value={musicSpotifyUrl} 
-                onChange={(e) => setMusicSpotifyUrl(e.target.value)} 
-                placeholder="https://open.spotify.com/..."
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Notes</label>
-              <textarea 
-                className="form-textarea" 
-                value={musicNotes} 
-                onChange={(e) => setMusicNotes(e.target.value)}
-                placeholder="Why you love it, when you discovered it, etc..."
-                rows="6"
-                style={{ minHeight: '150px' }}
-              />
-            </div>
-            <div className="form-actions">
-              <button className="form-button form-button-primary" type="submit">
-                Add Music
-              </button>
-            </div>
+        <>
+          <section className="post" style={{ padding: 'var(--space-lg)' }}>
+            <h3 className="twitter-sidebar-title" style={{ marginBottom: 'var(--space-md)', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>
+              Create Playlist
+            </h3>
+            <form onSubmit={submitMusic} className="add-content-form">
+              <div className="form-group">
+                <label className="form-label">Playlist Name</label>
+                <input 
+                  className="form-input" 
+                  value={playlistName} 
+                  onChange={(e) => setPlaylistName(e.target.value)} 
+                  placeholder="Summer Vibes, 90s Classics, etc."
+                  required 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Description (optional)</label>
+                <textarea 
+                  className="form-textarea" 
+                  value={playlistDescription} 
+                  onChange={(e) => setPlaylistDescription(e.target.value)}
+                  placeholder="A short description of the playlist"
+                  rows="3"
+                  style={{ minHeight: '80px' }}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Spotify URL (optional)</label>
+                <input 
+                  className="form-input" 
+                  type="url"
+                  value={spotifyUrl} 
+                  onChange={(e) => setSpotifyUrl(e.target.value)} 
+                  placeholder="https://open.spotify.com/playlist/..."
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">YouTube Music URL (optional)</label>
+                <input 
+                  className="form-input" 
+                  type="url"
+                  value={youtubeMusicUrl} 
+                  onChange={(e) => setYoutubeMusicUrl(e.target.value)} 
+                  placeholder="https://music.youtube.com/playlist?list=..."
+                />
+              </div>
+              <div className="form-actions">
+                <button className="form-button form-button-primary" type="submit">
+                  Create Playlist
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="post" style={{ padding: 'var(--space-lg)' }}>
+            <h3 className="twitter-sidebar-title" style={{ marginBottom: 'var(--space-md)', fontSize: 'clamp(1rem, 3vw, 1.25rem)' }}>
+              Manage Playlists
+            </h3>
+            {playlists.length === 0 ? (
+              <p className="post-content">No playlists yet. Create one above.</p>
+            ) : (
+              playlists.map(p => (
+                <div key={p.id} style={{ marginBottom: 'var(--space-lg)', padding: 'var(--space-md)', border: '1px solid var(--color-border)' }}>
+                  {editingPlaylist === p.id ? (
+                    <div style={{ marginBottom: 'var(--space-sm)' }}>
+                      <input 
+                        className="form-input" 
+                        defaultValue={p.name}
+                        id={`edit-name-${p.id}`}
+                        style={{ marginBottom: '0.5rem' }}
+                      />
+                      <textarea 
+                        className="form-textarea" 
+                        defaultValue={p.description}
+                        id={`edit-desc-${p.id}`}
+                        rows="2"
+                        style={{ minHeight: '60px', marginBottom: '0.5rem' }}
+                      />
+                      <input 
+                        className="form-input" 
+                        type="url"
+                        defaultValue={p.spotify_url || ''}
+                        id={`edit-spotify-${p.id}`}
+                        placeholder="Spotify URL"
+                        style={{ marginBottom: '0.5rem' }}
+                      />
+                      <input 
+                        className="form-input" 
+                        type="url"
+                        defaultValue={p.youtube_music_url || ''}
+                        id={`edit-youtube-${p.id}`}
+                        placeholder="YouTube Music URL"
+                        style={{ marginBottom: '0.5rem' }}
+                      />
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button 
+                          className="form-button" 
+                          onClick={() => {
+                            const name = document.getElementById(`edit-name-${p.id}`).value;
+                            const desc = document.getElementById(`edit-desc-${p.id}`).value;
+                            const spotify = document.getElementById(`edit-spotify-${p.id}`).value;
+                            const youtube = document.getElementById(`edit-youtube-${p.id}`).value;
+                            handleUpdatePlaylist(p.id, name, desc, spotify, youtube);
+                          }}
+                          style={{ fontSize: '0.875rem' }}
+                        >
+                          Save
+                        </button>
+                        <button 
+                          className="form-button" 
+                          onClick={() => setEditingPlaylist(null)}
+                          style={{ fontSize: '0.875rem' }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ margin: 0, fontSize: '1.125rem' }}>{p.name}</h4>
+                        {p.description && <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--color-text-light)' }}>{p.description}</p>}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button 
+                          className="form-button" 
+                          onClick={() => setEditingPlaylist(p.id)}
+                          style={{ fontSize: '0.875rem' }}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          className="form-button" 
+                          onClick={() => handleDeletePlaylist(p.id)}
+                          style={{ fontSize: '0.875rem' }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <button 
+                    className="form-button" 
+                    onClick={() => setActivePlaylist(activePlaylist === p.id ? null : p.id)}
+                    style={{ marginBottom: 'var(--space-sm)', fontSize: '0.875rem' }}
+                  >
+                    {activePlaylist === p.id ? '▾ Hide Songs' : '▸ Manage Songs'}
+                  </button>
+
+                  {activePlaylist === p.id && (
+                    <div style={{ marginTop: 'var(--space-md)' }}>
+                      {!showBulkInput ? (
+                        <>
+                          <div className="form-group">
+                            <label className="form-label" style={{ fontSize: '0.875rem' }}>Add Single Song</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr 0.8fr', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
+                              <input className="form-input" placeholder="Song title" value={songTitle} onChange={(e) => setSongTitle(e.target.value)} />
+                              <input className="form-input" placeholder="Album" value={songAlbum} onChange={(e) => setSongAlbum(e.target.value)} />
+                              <input className="form-input" placeholder="Artist" value={songArtist} onChange={(e) => setSongArtist(e.target.value)} />
+                              <input className="form-input" placeholder="Year" value={songYear} onChange={(e) => setSongYear(e.target.value)} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              <button className="form-button" onClick={() => handleAddSong(p.id)} style={{ fontSize: '0.875rem' }}>
+                                Add Song
+                              </button>
+                              <button className="form-button" onClick={() => setShowBulkInput(true)} style={{ fontSize: '0.875rem' }}>
+                                Add Multiple Songs
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="form-group">
+                          <label className="form-label" style={{ fontSize: '0.875rem' }}>
+                            Add Multiple Songs (one per line: Title | Artist | Album | Year)
+                          </label>
+                          <textarea 
+                            className="form-textarea"
+                            value={bulkSongs}
+                            onChange={(e) => setBulkSongs(e.target.value)}
+                            placeholder="Bohemian Rhapsody | Queen | A Night at the Opera | 1975&#10;Stairway to Heaven | Led Zeppelin | Led Zeppelin IV | 1971&#10;Hotel California | Eagles | Hotel California | 1976"
+                            rows="6"
+                            style={{ minHeight: '150px', fontFamily: 'monospace', fontSize: '0.875rem' }}
+                          />
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                            <button className="form-button" onClick={() => handleAddSongsBulk(p.id)} style={{ fontSize: '0.875rem' }}>
+                              Add All Songs
+                            </button>
+                            <button className="form-button" onClick={() => { setShowBulkInput(false); setBulkSongs(''); }} style={{ fontSize: '0.875rem' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {p.songs && p.songs.length > 0 && (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 'var(--space-md)', fontSize: '0.875rem' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ border: '1px solid var(--color-border)', padding: '0.5rem', textAlign: 'left', background: 'var(--color-hover)' }}>Title</th>
+                              <th style={{ border: '1px solid var(--color-border)', padding: '0.5rem', textAlign: 'left', background: 'var(--color-hover)' }}>Album</th>
+                              <th style={{ border: '1px solid var(--color-border)', padding: '0.5rem', textAlign: 'left', background: 'var(--color-hover)' }}>Artist</th>
+                              <th style={{ border: '1px solid var(--color-border)', padding: '0.5rem', textAlign: 'left', background: 'var(--color-hover)' }}>Year</th>
+                              <th style={{ border: '1px solid var(--color-border)', padding: '0.5rem', background: 'var(--color-hover)' }}></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {p.songs.map(s => (
+                              <tr key={s.id}>
+                                <td style={{ border: '1px solid var(--color-border)', padding: '0.5rem' }}>{s.title}</td>
+                                <td style={{ border: '1px solid var(--color-border)', padding: '0.5rem' }}>{s.album || '—'}</td>
+                                <td style={{ border: '1px solid var(--color-border)', padding: '0.5rem' }}>{s.artist}</td>
+                                <td style={{ border: '1px solid var(--color-border)', padding: '0.5rem' }}>{s.year || '—'}</td>
+                                <td style={{ border: '1px solid var(--color-border)', padding: '0.5rem', textAlign: 'center' }}>
+                                  <button className="form-button" onClick={() => handleDeleteSong(p.id, s.id)} style={{ fontSize: '0.75rem' }}>
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
             {status && (
               <div style={{ 
                 marginTop: '1rem', 
@@ -515,8 +826,8 @@ export default function AdminPanel() {
                 {status}
               </div>
             )}
-          </form>
-        </section>
+          </section>
+        </>
       )}
     </div>
   );

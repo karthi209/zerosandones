@@ -1,156 +1,140 @@
 import { Router } from 'express';
-import pool from '../db.js';
-import { authenticateApiKey } from '../middleware/auth.js';
+import { Game } from '../models/Game.js';
+import { GameLog } from '../models/GameLog.js';
+import { Screen } from '../models/Screen.js';
+import { ScreenLog } from '../models/ScreenLog.js';
+import { Read } from '../models/Read.js';
+import { ReadLog } from '../models/ReadLog.js';
+import { Playlist } from '../models/Playlist.js';
 
 const router = Router();
 
-// Get all logs
+// Get all logs (backward compatibility endpoint)
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM logs ORDER BY date DESC');
-    const logs = result.rows.map(row => ({ ...row, _id: row.id }));
-    res.json(logs);
+    // Aggregate all recent logs from different tables
+    const results = [];
+    
+    // Get game logs with game info
+    const games = await Game.findAll();
+    for (const game of games.slice(0, 10)) {
+      const logs = await GameLog.findByGameId(game.id);
+      if (logs.length > 0) {
+        const latestLog = logs[0];
+        results.push({
+          _id: game.id,
+          id: game.id,
+          title: game.title,
+          type: 'games',
+          rating: latestLog.rating?.toString(),
+          date: latestLog.created_at
+        });
+      }
+    }
+    
+    res.json(results);
   } catch (err) {
     console.error('Error fetching logs:', err);
     res.status(500).json({ message: err.message });
   }
 });
 
-// Get logs by type
+// Get logs by type (backward compatibility)
 router.get('/:type', async (req, res) => {
   try {
     const { type } = req.params;
-    const validTypes = ['music', 'games', 'movies', 'series', 'books'];
+    const results = [];
     
-    if (!validTypes.includes(type)) {
-      return res.status(400).json({ message: 'Invalid log type' });
+    switch (type) {
+      case 'music':
+        // Music is now playlists
+        const playlists = await Playlist.findAll();
+        results.push(...playlists.map(p => ({
+          _id: p.id,
+          id: p.id,
+          title: p.name,
+          type: 'music',
+          rating: null,
+          date: p.created_at
+        })));
+        break;
+        
+      case 'games':
+        const games = await Game.findAll();
+        for (const game of games) {
+          const logs = await GameLog.findByGameId(game.id);
+          const latestLog = logs[0];
+          results.push({
+            _id: game.id,
+            id: game.id,
+            title: game.title,
+            type: 'games',
+            rating: latestLog?.rating?.toString(),
+            status: latestLog?.status,
+            date: latestLog?.created_at || game.created_at
+          });
+        }
+        break;
+        
+      case 'movies':
+        const movies = await Screen.findAll('movie');
+        for (const movie of movies) {
+          const logs = await ScreenLog.findByScreenId(movie.id);
+          const latestLog = logs[0];
+          results.push({
+            _id: movie.id,
+            id: movie.id,
+            title: movie.title,
+            type: 'movies',
+            rating: latestLog?.rating?.toString(),
+            status: latestLog?.status,
+            date: latestLog?.created_at || movie.created_at
+          });
+        }
+        break;
+        
+      case 'series':
+        const series = await Screen.findAll('series');
+        for (const show of series) {
+          const logs = await ScreenLog.findByScreenId(show.id);
+          const latestLog = logs[0];
+          results.push({
+            _id: show.id,
+            id: show.id,
+            title: show.title,
+            type: 'series',
+            rating: latestLog?.rating?.toString(),
+            status: latestLog?.status,
+            date: latestLog?.created_at || show.created_at
+          });
+        }
+        break;
+        
+      case 'books':
+        const books = await Read.findAll();
+        for (const book of books) {
+          const logs = await ReadLog.findByReadId(book.id);
+          const latestLog = logs[0];
+          results.push({
+            _id: book.id,
+            id: book.id,
+            title: book.title,
+            type: 'books',
+            author: book.author,
+            rating: latestLog?.rating?.toString(),
+            status: latestLog?.status,
+            date: latestLog?.created_at || book.created_at
+          });
+        }
+        break;
+        
+      default:
+        return res.status(400).json({ message: 'Invalid log type' });
     }
-
-    const result = await pool.query(
-      'SELECT * FROM logs WHERE type = $1 ORDER BY date DESC',
-      [type]
-    );
-    const logs = result.rows.map(row => ({ ...row, _id: row.id }));
-    res.json(logs);
+    
+    res.json(results);
   } catch (err) {
     console.error('Error fetching logs by type:', err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Get single log by type and ID
-router.get('/:type/:id', async (req, res) => {
-  try {
-    const { type, id } = req.params;
-    const validTypes = ['music', 'games', 'movies', 'series', 'books'];
-    
-    if (!validTypes.includes(type)) {
-      return res.status(400).json({ message: 'Invalid log type' });
-    }
-
-    const logId = parseInt(id);
-    if (isNaN(logId)) {
-      return res.status(400).json({ message: 'Invalid log ID format' });
-    }
-
-    const result = await pool.query(
-      'SELECT * FROM logs WHERE type = $1 AND id = $2',
-      [type, logId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Log not found' });
-    }
-
-    const log = { ...result.rows[0], _id: result.rows[0].id, category: result.rows[0].type };
-    res.json(log);
-  } catch (err) {
-    console.error('Error fetching log:', err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Add new log
-router.post('/', authenticateApiKey, async (req, res) => {
-  try {
-    const { title, type, content, rating, status, completion, author } = req.body;
-    
-    // Validate required fields
-    if (!title || !type) {
-      return res.status(400).json({ 
-        message: 'Title and type are required' 
-      });
-    }
-
-    const validTypes = ['music', 'games', 'movies', 'series', 'books'];
-    if (!validTypes.includes(type)) {
-      return res.status(400).json({ message: 'Invalid log type' });
-    }
-
-    const result = await pool.query(
-      `INSERT INTO logs (title, type, content, rating, status, completion, author, date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-       RETURNING *`,
-      [title, type, content || null, rating || null, status || null, completion || null, author || null]
-    );
-
-    const log = { ...result.rows[0], _id: result.rows[0].id };
-    res.status(201).json(log);
-  } catch (err) {
-    console.error('Error saving log:', err);
-    res.status(400).json({ message: err.message });
-  }
-});
-
-// Update log
-router.put('/:id', authenticateApiKey, async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const { title, type, content, rating, status, completion, author } = req.body;
-    
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid log ID format' });
-    }
-
-    const result = await pool.query(
-      `UPDATE logs 
-       SET title = $1, type = $2, content = $3, rating = $4, status = $5, 
-           completion = $6, author = $7, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8
-       RETURNING *`,
-      [title, type, content || null, rating || null, status || null, completion || null, author || null, id]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Log not found' });
-    }
-
-    const log = { ...result.rows[0], _id: result.rows[0].id };
-    res.json(log);
-  } catch (err) {
-    console.error('Error updating log:', err);
-    res.status(400).json({ message: err.message });
-  }
-});
-
-// Delete log
-router.delete('/:id', authenticateApiKey, async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    
-    if (isNaN(id)) {
-      return res.status(400).json({ message: 'Invalid log ID format' });
-    }
-
-    const result = await pool.query('DELETE FROM logs WHERE id = $1 RETURNING *', [id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Log not found' });
-    }
-
-    res.json({ message: 'Log deleted successfully', log: result.rows[0] });
-  } catch (err) {
-    console.error('Error deleting log:', err);
     res.status(500).json({ message: err.message });
   }
 });

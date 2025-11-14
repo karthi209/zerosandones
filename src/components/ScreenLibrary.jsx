@@ -26,7 +26,7 @@ export default function ScreenLibrary() {
 
   const handleEntryClick = (entry) => {
     const category = entry.type || entry.category || 'movies';
-    navigate(`/myverse/${category}/${entry._id || entry.id}`);
+    navigate(`/library/${category}/${entry._id || entry.id}`);
   };
 
   if (loading) {

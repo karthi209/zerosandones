@@ -24,7 +24,7 @@ export default function GamesLibrary() {
   }, []);
 
   const handleEntryClick = (entry) => {
-    navigate(`/myverse/games/${entry._id || entry.id}`);
+    navigate(`/library/games/${entry._id || entry.id}`);
   };
 
   if (loading) {

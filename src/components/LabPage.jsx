@@ -14,11 +14,11 @@ export default function LabPage() {
   return (
     <div className="container">
       <div className="post">
-        <h2 className="post-section-title">Lab</h2>
+        <h2 className="post-section-title">Projects</h2>
         <p className="post-content">
           My tech playground - experimental projects, creative code, side projects, 
-          and anything I'm currently tinkering with. Some work in progress, some abandoned, 
-          all interesting.
+          and anything I'm currently building. Some work in progress, some shipped, 
+          all worth exploring.
         </p>
       </div>
 

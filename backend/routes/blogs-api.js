@@ -1,13 +1,9 @@
 import { Router } from 'express';
 import pool from '../db.js';
-import { authenticateApiKey } from '../middleware/auth.js';
 import fs from 'fs/promises';
 import path from 'path';
 
 const router = Router();
-
-// All routes in this file require API key authentication
-router.use(authenticateApiKey);
 
 // Create blog from markdown file upload
 router.post('/from-file', async (req, res) => {

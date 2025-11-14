@@ -1,12 +1,26 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 
 export default function LogDetail() {
-  const { category, id } = useParams();
+  const params = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [log, setLog] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Derive category and id from params or fallback to pathname parsing
+  const { category: paramCategory, id: paramId } = params || {};
+  let category = paramCategory;
+  let id = paramId;
+
+  if (!category || !id) {
+    const parts = location.pathname.split('/').filter(Boolean); // e.g., ['', 'library', 'music', '123'] -> ['library','music','123']
+    if (parts[0] === 'library' && parts.length >= 3) {
+      category = parts[1];
+      id = parts[2];
+    }
+  }
 
   useEffect(() => {
     const fetchLog = async () => {
@@ -57,14 +71,14 @@ export default function LogDetail() {
             <p>Sorry, this entry doesn't exist or has been removed.</p>
             <p>
               <a 
-                href="/myverse"
+                href="/library"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate('/myverse');
+                  navigate('/library');
                 }}
                 className="read-more-link"
               >
-                ← Back to Myverse
+                ← Back to Library
               </a>
             </p>
           </div>
@@ -78,10 +92,10 @@ export default function LogDetail() {
       <div className="log-detail">
         <div className="log-detail-header">
           <button
-            onClick={() => navigate('/myverse')}
+            onClick={() => navigate('/library')}
             className="back-button"
           >
-            ← Back to Myverse
+            ← Back to Library
           </button>
         </div>
 

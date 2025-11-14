@@ -1,0 +1,301 @@
+/* Music Library - Playlists */
+.playlist {
+  margin-bottom: 0;
+}
+
+.playlist-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s ease;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid;
+  border-color: currentColor;
+  opacity: 0.85;
+}
+
+.playlist-link:hover {
+  opacity: 1;
+}
+
+.playlist-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.playlist-arrow {
+  font-size: 1.5rem;
+  opacity: 0.4;
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.playlist-link:hover .playlist-arrow {
+  opacity: 1;
+  transform: translateX(4px);
+}
+
+.playlist-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.playlist-name {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-count {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.playlist-description {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.playlist-body {
+  margin-top: 1.5rem;
+  padding-left: 2.5rem;
+}
+
+/* Song List */
+.songs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 1rem;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+}
+
+.song-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 0.75rem 0;
+  border-bottom: 1px dotted;
+  border-color: currentColor;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.song-item:last-child {
+  border-bottom: none;
+}
+
+.song-item:hover {
+  opacity: 1;
+  background-color: transparent;
+}
+
+:root[data-theme="dark"] .song-item:hover {
+  background-color: transparent;
+}
+
+.song-number {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.85rem;
+  opacity: 0.5;
+  min-width: 1.5ch;
+  text-align: right;
+  flex-shrink: 0;
+  padding-top: 0.05rem;
+  margin-right: 0.75rem;
+}
+
+.song-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.song-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.song-meta {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Additional styles for full playlist description page */
+.playlist-description-full {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0;
+  opacity: 0.85;
+}
+
+/* Disable drop cap for playlist descriptions */
+.playlist-description-full::first-letter,
+.post-content .playlist-description-full::first-letter {
+  font-size: inherit !important;
+  float: none !important;
+  margin-right: 0 !important;
+  line-height: inherit !important;
+  color: inherit !important;
+  font-family: inherit !important;
+  font-weight: inherit !important;
+}
+
+/* Smaller back button for playlists */
+.post-header .back-link {
+  font-size: 0.9rem;
+  display: inline-block;
+  margin-bottom: 1rem;
+}
+
+.playlist-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+  padding: 0;
+}
+
+.playlist-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-bottom: 2px solid currentColor;
+  background: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: inherit;
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.playlist-action-btn:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+  border-bottom-width: 3px;
+}
+
+  .playlist-action-btn .action-icon {
+    font-size: 0.9rem;
+  }
+  
+  .playlist-description-full {
+    font-size: 0.875rem;
+    line-height: 1.45;
+  }
+}/* Mobile and small tablets */
+@media (max-width: 768px) {
+  .playlist {
+    margin-bottom: 0;
+  }
+
+  .playlist-link {
+    padding: 0.6rem 0;
+  }
+
+  .playlist-header {
+    gap: 0.75rem;
+  }
+
+  .playlist-title-row {
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: flex-start;
+  }
+
+  .playlist-name {
+    font-size: 1.25rem;
+  }
+
+  .playlist-count {
+    font-size: 0.8rem;
+  }
+
+  .playlist-description {
+    font-size: 0.9rem;
+  }
+
+  .playlist-body {
+    padding-left: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .songs-list {
+    gap: 0;
+  }
+
+  .song-item {
+    padding: 0.45rem 0;
+    gap: 0;
+  }
+
+  .song-number {
+    font-size: 0.8rem;
+    min-width: 1.5ch;
+    margin-right: 0.4rem;
+  }
+
+  .song-title {
+    font-size: 0.875rem;
+  }
+
+  .song-meta {
+    font-size: 0.75rem;
+  }
+
+  .playlist-actions {
+    gap: 0.5rem;
+    margin: 1.25rem 0;
+  }
+
+  .playlist-action-btn {
+    padding: 0.55rem 0.75rem;
+    font-size: 0.8rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .playlist-action-btn .action-icon {
+    font-size: 0.9rem;
+  }
+
+  .playlist-description-full {
+    font-size: 0.875rem;
+    line-height: 1.45;
+    margin-top: 0.6rem;
+  }
+}
+

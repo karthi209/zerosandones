@@ -14,7 +14,10 @@ export const adminCreateLog = async ({ title, type, content, rating }) => {
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ title, type, content, rating }),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || `HTTP ${res.status}`);
+  }
   return res.json();
 };
 
