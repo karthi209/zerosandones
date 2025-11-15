@@ -1,7 +1,7 @@
 import { getStoredApiKey } from './admin';
 
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const API = `${BASE}/api`;
+const BASE = import.meta.env.VITE_API_URL || '/api';
+const API = BASE;
 
 const authHeaders = () => {
   const key = getStoredApiKey();

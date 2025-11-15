@@ -11,8 +11,8 @@ export default function PlaylistPage({ id }) {
     const fetchPlaylist = async () => {
       try {
         setLoading(true);
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-        const url = apiUrl.endsWith('/api') ? `${apiUrl}/playlists` : `${apiUrl}/api/playlists`;
+        const apiUrl = import.meta.env.VITE_API_URL || '/api';
+        const url = `${apiUrl}/playlists`;
         console.log('Fetching from:', url);
         console.log('Looking for playlist ID:', id, 'type:', typeof id);
         const response = await fetch(url);

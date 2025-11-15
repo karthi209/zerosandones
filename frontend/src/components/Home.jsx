@@ -171,7 +171,7 @@ export default function Home({ themeToggleButton }) {
       <div className="homepage-layout">
         <div className="homepage-main">
           <div className="hero-banner">
-            <img src="/palebluedot.png" alt="Pale Blue Dot" style={{ margin: 0 }} />
+            <img src="/palebluedot.jpg" alt="Pale Blue Dot" style={{ margin: 0 }} />
               <div className="hero-image-credit" style={{ textAlign: 'right', fontSize: '0.65em', color: '#888', marginTop: '2px', fontStyle: 'italic' }}>
                 Image: Pale Blue Dot, NASA/JPL-Caltech
               </div>

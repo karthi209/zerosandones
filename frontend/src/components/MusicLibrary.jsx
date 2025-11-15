@@ -9,8 +9,8 @@ export default function MusicLibrary() {
   useEffect(() => {
     const fetchPlaylists = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-        const url = apiUrl.endsWith('/api') ? `${apiUrl}/playlists` : `${apiUrl}/api/playlists`;
+        const apiUrl = import.meta.env.VITE_API_URL || '/api';
+        const url = `${apiUrl}/playlists`;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Failed to fetch playlists');
         const data = await response.json();

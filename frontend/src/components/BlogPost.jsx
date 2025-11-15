@@ -39,11 +39,7 @@ export default function BlogPost() {
     const fetchPost = async () => {
       try {
         // Use remote backend API URL
-        let apiUrl = import.meta.env.VITE_API_URL;
-        // If VITE_API_URL already ends with /api, don't add it again
-        if (apiUrl && !apiUrl.endsWith('/api')) {
-          apiUrl = apiUrl + '/api';
-        }
+        let apiUrl = import.meta.env.VITE_API_URL || '/api';
         const response = await fetch(`${apiUrl}/blogs/${id}`);
         if (!response.ok) {
           throw new Error(
